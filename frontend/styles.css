@@ -31,6 +31,10 @@ body {
 	height: 100vh;
 }
 
+.hidden {
+	display: none !important;
+}
+
 button,
 textarea {
 	font: inherit;
@@ -44,6 +48,38 @@ button {
 	display: grid;
 	grid-template-columns: 280px minmax(0, 1fr) 320px;
 	height: 100vh;
+}
+
+.setup-screen {
+	position: fixed;
+	inset: 0;
+	background: rgba(18, 18, 18, 0.46);
+	display: grid;
+	place-items: center;
+	z-index: 20;
+	padding: 2rem;
+}
+
+.setup-card {
+	width: min(760px, 100%);
+	background: #f7f7f7;
+	border: 1px solid var(--line);
+	border-radius: 28px;
+	box-shadow: 0 30px 80px rgba(0, 0, 0, 0.14);
+	padding: 2rem;
+	display: grid;
+	gap: 1.25rem;
+}
+
+.setup-card h1,
+.settings-panel h2 {
+	margin: 0;
+}
+
+.setup-copy {
+	margin: 0;
+	color: var(--muted);
+	max-width: 58ch;
 }
 
 .sidebar {
@@ -110,6 +146,27 @@ button {
 .sidebar-nav {
 	display: grid;
 	gap: 0.5rem;
+}
+
+.mode-pills {
+	display: flex;
+	gap: 0.75rem;
+	flex-wrap: wrap;
+}
+
+.mode-pill {
+	background: #ededed;
+	color: var(--muted);
+	border: 1px solid transparent;
+}
+
+.mode-pill.active {
+	background: #1f1f1f;
+	color: #fff;
+}
+
+.embedded-mode-pills {
+	margin-bottom: 0.75rem;
 }
 
 .nav-item {
@@ -397,6 +454,61 @@ button.ghost {
 	min-width: 220px;
 }
 
+.settings-panel {
+	display: grid;
+	align-content: start;
+}
+
+.settings-grid,
+.setup-form {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 1rem;
+}
+
+.field {
+	display: grid;
+	gap: 0.45rem;
+}
+
+.field span {
+	font-size: 0.88rem;
+	color: var(--muted);
+}
+
+.field input {
+	padding: 0.88rem 0.95rem;
+	border-radius: 16px;
+	border: 1px solid var(--line);
+	background: #fafafa;
+}
+
+.field input:disabled {
+	background: #efefef;
+	color: #8a8a8a;
+}
+
+.setup-status {
+	min-height: 1.5rem;
+	font-size: 0.92rem;
+	color: var(--muted);
+}
+
+.setup-status.error {
+	color: #9b1c1c;
+}
+
+.setup-status.success {
+	color: #1f5130;
+}
+
+.setup-actions,
+.settings-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 0.75rem;
+}
+
 .plugin-card {
 	padding: 0.95rem 1rem;
 	border-radius: var(--radius-sm);
@@ -469,6 +581,11 @@ button.ghost {
 	}
 
 	.plugin-layout {
+		grid-template-columns: 1fr;
+	}
+
+	.settings-grid,
+	.setup-form {
 		grid-template-columns: 1fr;
 	}
 

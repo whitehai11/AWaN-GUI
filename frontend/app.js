@@ -9,10 +9,33 @@ const state = {
 	page: 'chat',
 	installedPlugins: [],
 	availablePlugins: [],
-	pluginQuery: ''
+	pluginQuery: '',
+	setupRequired: false,
+	runtimeConfig: {
+		mode: 'local',
+		server: 'http://localhost:7452',
+		token: ''
+	}
 };
 
 const elements = {
+	setupScreen: document.getElementById('setup-screen'),
+	setupStatus: document.getElementById('setup-status'),
+	modeLocal: document.getElementById('mode-local'),
+	modeRemote: document.getElementById('mode-remote'),
+	runtimeServerInput: document.getElementById('runtime-server-input'),
+	runtimeTokenInput: document.getElementById('runtime-token-input'),
+	testRuntimeButton: document.getElementById('test-runtime-button'),
+	saveRuntimeButton: document.getElementById('save-runtime-button'),
+	settingsModeLocal: document.getElementById('settings-mode-local'),
+	settingsModeRemote: document.getElementById('settings-mode-remote'),
+	settingsServerInput: document.getElementById('settings-server-input'),
+	settingsTokenInput: document.getElementById('settings-token-input'),
+	settingsStatus: document.getElementById('settings-status'),
+	settingsTestButton: document.getElementById('settings-test-button'),
+	settingsSaveButton: document.getElementById('settings-save-button'),
+	runtimeModePill: document.getElementById('runtime-mode-pill'),
+	runtimeVersionPill: document.getElementById('runtime-version-pill'),
 	agentList: document.getElementById('agent-list'),
 	runtimeStatus: document.getElementById('runtime-status'),
 	runtimeEndpoint: document.getElementById('runtime-endpoint'),
@@ -29,6 +52,7 @@ const elements = {
 	refreshFiles: document.getElementById('refresh-files'),
 	chatPage: document.getElementById('chat-page'),
 	pluginsPage: document.getElementById('plugins-page'),
+	settingsPage: document.getElementById('settings-page'),
 	navItems: document.querySelectorAll('[data-page]'),
 	installedPlugins: document.getElementById('installed-plugins'),
 	availablePlugins: document.getElementById('available-plugins'),
@@ -40,8 +64,12 @@ const elements = {
 async function bootstrap() {
 	try {
 		const result = await window.go.ui.App.Initialize();
+		state.setupRequired = Boolean(result.setupRequired);
+		state.runtimeConfig = result.config || state.runtimeConfig;
 		state.status = result.status;
 		state.agents = result.agents || [];
+
+		applyRuntimeConfigToForm();
 
 		if (state.agents.length > 0) {
 			state.currentAgent = state.agents[0].name;
@@ -49,18 +77,28 @@ async function bootstrap() {
 		}
 
 		render();
-		await Promise.all([refreshMemory(), refreshFiles(), refreshPlugins()]);
+
+		if (!state.setupRequired && state.status?.online) {
+			await Promise.all([refreshMemory(), refreshFiles(), refreshPlugins()]);
+		}
 	} catch (error) {
+		state.setupRequired = true;
 		state.status = {
 			online: false,
-			endpoint: 'http://localhost:7452',
-			message: error.message || 'Failed to initialize AWaN GUI'
+			endpoint: state.runtimeConfig.server,
+			message: error.message || 'Failed to initialize AWaN GUI',
+			mode: state.runtimeConfig.mode,
+			version: 'unknown',
+			authenticated: false,
+			authMode: 'unknown'
 		};
+		applyRuntimeConfigToForm();
 		render();
 	}
 }
 
 function render() {
+	renderSetup();
 	renderPage();
 	renderStatus();
 	renderAgents();
@@ -69,29 +107,40 @@ function render() {
 	renderFiles();
 	renderInstalledPlugins();
 	renderAvailablePlugins();
+	renderSettings();
+}
+
+function renderSetup() {
+	elements.setupScreen.classList.toggle('hidden', !state.setupRequired);
+	toggleModeButtons('[data-runtime-mode]', state.runtimeConfig.mode);
+	toggleModeButtons('[data-settings-mode]', state.runtimeConfig.mode);
+	applyModeFieldState();
 }
 
 function renderPage() {
-	const isChat = state.page === 'chat';
-	elements.chatPage.classList.toggle('active', isChat);
-	elements.pluginsPage.classList.toggle('active', !isChat);
+	const activePage = state.page;
+	elements.chatPage.classList.toggle('active', activePage === 'chat');
+	elements.pluginsPage.classList.toggle('active', activePage === 'plugins');
+	elements.settingsPage.classList.toggle('active', activePage === 'settings');
 	elements.navItems.forEach((item) => {
-		item.classList.toggle('active', item.getAttribute('data-page') === state.page);
+		item.classList.toggle('active', item.getAttribute('data-page') === activePage);
 	});
 }
 
 function renderStatus() {
 	const status = state.status;
 	if (!status) {
-		elements.runtimeStatus.textContent = 'Checking AWaN Core...';
+		elements.runtimeStatus.textContent = 'Waiting for runtime setup...';
 		elements.runtimeEndpoint.textContent = '';
 		return;
 	}
 
 	elements.runtimeStatus.textContent = status.message;
-	elements.runtimeEndpoint.textContent = status.endpoint;
+	elements.runtimeEndpoint.textContent = `${status.endpoint} · ${status.mode || 'local'} · auth ${status.authMode || 'unknown'}`;
 	elements.currentAgentLabel.textContent = `Agent: ${state.currentAgent}`;
 	elements.currentModelLabel.textContent = `Model: ${state.currentModel}`;
+	elements.runtimeModePill.textContent = `Mode: ${state.runtimeConfig.mode || 'local'}`;
+	elements.runtimeVersionPill.textContent = `Version: ${status.version || 'unknown'}`;
 }
 
 function renderAgents() {
@@ -296,6 +345,11 @@ function renderAvailablePlugins() {
 	});
 }
 
+function renderSettings() {
+	elements.settingsServerInput.value = state.runtimeConfig.server || 'http://localhost:7452';
+	elements.settingsTokenInput.value = state.runtimeConfig.token || '';
+}
+
 async function refreshAgents() {
 	state.agents = await window.go.ui.App.ListAgents();
 	if (state.agents.length > 0 && !state.agents.some((agent) => agent.name === state.currentAgent)) {
@@ -337,6 +391,86 @@ async function refreshPlugins() {
 		elements.installedPlugins.innerHTML = `<div class="empty-state"><p>${escapeHTML(error.message || 'Failed to load plugins')}</p></div>`;
 		elements.availablePlugins.innerHTML = `<div class="empty-state"><p>${escapeHTML(error.message || 'Failed to load plugins')}</p></div>`;
 	}
+}
+
+async function applyRuntimeConfig(save, targetElement) {
+	const mode = state.runtimeConfig.mode;
+	const server = state.runtimeConfig.server;
+	const token = state.runtimeConfig.token;
+
+	try {
+		const result = save
+			? await window.go.ui.App.SaveRuntimeConfiguration(mode, server, token)
+			: { status: await window.go.ui.App.TestRuntimeConnection(mode, server, token), config: { ...state.runtimeConfig } };
+
+		state.status = result.status;
+		state.runtimeConfig = result.config || state.runtimeConfig;
+		renderStatus();
+		showStatusMessage(targetElement, `${save ? 'Saved' : 'Connected'}: ${result.status.message}`, false);
+
+		if (save) {
+			state.setupRequired = false;
+			elements.setupStatus.textContent = '';
+		}
+
+		state.agents = await window.go.ui.App.ListAgents();
+		if (state.agents.length > 0) {
+			state.currentAgent = state.agents[0].name;
+			state.currentModel = state.agents[0].model;
+		}
+		await Promise.all([refreshMemory(), refreshFiles(), refreshPlugins()]);
+		render();
+	} catch (error) {
+		state.status = {
+			online: false,
+			endpoint: server,
+			message: error.message || 'Connection failed',
+			mode,
+			version: 'unknown',
+			authenticated: false,
+			authMode: token ? 'token' : 'unknown'
+		};
+		renderStatus();
+		showStatusMessage(targetElement, error.message || 'Connection failed', true);
+	}
+}
+
+function showStatusMessage(element, message, isError) {
+	element.textContent = message;
+	element.classList.toggle('error', isError);
+	element.classList.toggle('success', !isError);
+}
+
+function applyRuntimeConfigToForm() {
+	elements.runtimeServerInput.value = state.runtimeConfig.server || 'http://localhost:7452';
+	elements.runtimeTokenInput.value = state.runtimeConfig.token || '';
+	elements.settingsServerInput.value = state.runtimeConfig.server || 'http://localhost:7452';
+	elements.settingsTokenInput.value = state.runtimeConfig.token || '';
+	renderSetup();
+	renderSettings();
+}
+
+function applyModeFieldState() {
+	const isLocal = state.runtimeConfig.mode === 'local';
+	elements.runtimeServerInput.value = state.runtimeConfig.server || 'http://localhost:7452';
+	elements.settingsServerInput.value = state.runtimeConfig.server || 'http://localhost:7452';
+	elements.runtimeServerInput.disabled = isLocal;
+	elements.runtimeTokenInput.disabled = false;
+	elements.settingsServerInput.disabled = isLocal;
+}
+
+function toggleModeButtons(selector, activeMode) {
+	document.querySelectorAll(selector).forEach((button) => {
+		button.classList.toggle('active', button.getAttribute(button.dataset.runtimeMode ? 'data-runtime-mode' : 'data-settings-mode') === activeMode);
+	});
+}
+
+function setRuntimeMode(mode) {
+	state.runtimeConfig.mode = mode;
+	if (mode === 'local' && !state.runtimeConfig.server) {
+		state.runtimeConfig.server = 'http://localhost:7452';
+	}
+	applyRuntimeConfigToForm();
 }
 
 elements.chatForm.addEventListener('submit', async (event) => {
@@ -391,6 +525,44 @@ elements.navItems.forEach((item) => {
 			await refreshPlugins();
 		}
 	});
+});
+
+document.querySelectorAll('[data-runtime-mode]').forEach((button) => {
+	button.addEventListener('click', () => setRuntimeMode(button.getAttribute('data-runtime-mode') || 'local'));
+});
+
+document.querySelectorAll('[data-settings-mode]').forEach((button) => {
+	button.addEventListener('click', () => setRuntimeMode(button.getAttribute('data-settings-mode') || 'local'));
+});
+
+elements.runtimeServerInput.addEventListener('input', (event) => {
+	state.runtimeConfig.server = event.target.value;
+	elements.settingsServerInput.value = event.target.value;
+});
+elements.runtimeTokenInput.addEventListener('input', (event) => {
+	state.runtimeConfig.token = event.target.value;
+	elements.settingsTokenInput.value = event.target.value;
+});
+elements.settingsServerInput.addEventListener('input', (event) => {
+	state.runtimeConfig.server = event.target.value;
+	elements.runtimeServerInput.value = event.target.value;
+});
+elements.settingsTokenInput.addEventListener('input', (event) => {
+	state.runtimeConfig.token = event.target.value;
+	elements.runtimeTokenInput.value = event.target.value;
+});
+
+elements.testRuntimeButton.addEventListener('click', async () => {
+	await applyRuntimeConfig(false, elements.setupStatus);
+});
+elements.saveRuntimeButton.addEventListener('click', async () => {
+	await applyRuntimeConfig(true, elements.setupStatus);
+});
+elements.settingsTestButton.addEventListener('click', async () => {
+	await applyRuntimeConfig(false, elements.settingsStatus);
+});
+elements.settingsSaveButton.addEventListener('click', async () => {
+	await applyRuntimeConfig(true, elements.settingsStatus);
 });
 
 function escapeHTML(value) {

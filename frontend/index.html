@@ -7,6 +7,37 @@
 		<link rel="stylesheet" href="./styles.css" />
 	</head>
 	<body>
+		<section id="setup-screen" class="setup-screen hidden">
+			<div class="setup-card">
+				<p class="eyebrow">Welcome to AWaN</p>
+				<h1>Choose how this GUI should connect to AWaN Core</h1>
+				<p class="setup-copy">Run AWaN locally on this machine or point the desktop app at an existing runtime on your network.</p>
+
+				<div class="mode-pills">
+					<button id="mode-local" class="mode-pill active" data-runtime-mode="local">Local Runtime</button>
+					<button id="mode-remote" class="mode-pill" data-runtime-mode="remote">Connect to Remote Server</button>
+				</div>
+
+				<div class="setup-form">
+					<label class="field">
+						<span>Server Address</span>
+						<input id="runtime-server-input" type="text" placeholder="http://localhost:7452" />
+					</label>
+					<label class="field">
+						<span>API Token (optional)</span>
+						<input id="runtime-token-input" type="password" placeholder="abc123" />
+					</label>
+				</div>
+
+				<div id="setup-status" class="setup-status"></div>
+
+				<div class="setup-actions">
+					<button id="test-runtime-button" class="ghost">Test connection</button>
+					<button id="save-runtime-button">Save and continue</button>
+				</div>
+			</div>
+		</section>
+
 		<div class="shell">
 			<aside class="sidebar">
 				<div class="sidebar-top">
@@ -31,6 +62,7 @@
 				<div class="sidebar-nav">
 					<button class="nav-item active" data-page="chat">Chat</button>
 					<button class="nav-item" data-page="plugins">Plugins</button>
+					<button class="nav-item" data-page="settings">Settings</button>
 				</div>
 
 				<div class="sidebar-footer">
@@ -98,6 +130,49 @@
 							<div id="available-plugins" class="stack"></div>
 						</section>
 					</div>
+				</section>
+
+				<section id="settings-page" class="page">
+					<header class="hero">
+						<div class="hero-copy">
+							<p class="eyebrow">Runtime</p>
+							<h2>Connection settings</h2>
+						</div>
+						<div class="hero-meta">
+							<span id="runtime-mode-pill" class="pill">Mode: local</span>
+							<span id="runtime-version-pill" class="pill muted-pill">Version: unknown</span>
+						</div>
+					</header>
+
+					<section class="panel settings-panel">
+						<div class="panel-header">
+							<h2>AWaN Core connection</h2>
+							<span class="section-meta">config.awan</span>
+						</div>
+
+						<div class="mode-pills embedded-mode-pills">
+							<button id="settings-mode-local" class="mode-pill active" data-settings-mode="local">Local Runtime</button>
+							<button id="settings-mode-remote" class="mode-pill" data-settings-mode="remote">Remote Server</button>
+						</div>
+
+						<div class="settings-grid">
+							<label class="field">
+								<span>Server Address</span>
+								<input id="settings-server-input" type="text" placeholder="http://localhost:7452" />
+							</label>
+							<label class="field">
+								<span>API Token (optional)</span>
+								<input id="settings-token-input" type="password" placeholder="abc123" />
+							</label>
+						</div>
+
+						<div id="settings-status" class="setup-status"></div>
+
+						<div class="settings-actions">
+							<button id="settings-test-button" class="ghost">Test connection</button>
+							<button id="settings-save-button">Save runtime</button>
+						</div>
+					</section>
 				</section>
 			</main>
 

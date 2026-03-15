@@ -19,14 +19,26 @@ const defaultEndpoint = "http://localhost:7452"
 // CoreClient talks to the AWaN Core runtime.
 type CoreClient struct {
 	endpoint   string
+	token      string
+	mode       string
 	httpClient *http.Client
 }
 
 // RuntimeStatus describes the local runtime connection state.
 type RuntimeStatus struct {
-	Online   bool   `json:"online"`
-	Endpoint string `json:"endpoint"`
-	Message  string `json:"message"`
+	Online        bool   `json:"online"`
+	Endpoint      string `json:"endpoint"`
+	Message       string `json:"message"`
+	Mode          string `json:"mode"`
+	Version       string `json:"version"`
+	Authenticated bool   `json:"authenticated"`
+	AuthMode      string `json:"authMode"`
+}
+
+type HealthResponse struct {
+	Status  string `json:"status"`
+	Version string `json:"version"`
+	Auth    string `json:"auth"`
 }
 
 // AgentRunRequest is sent to /agent/run.
@@ -94,6 +106,7 @@ func NewCoreClient(endpoint string) *CoreClient {
 
 	return &CoreClient{
 		endpoint: strings.TrimRight(base, "/"),
+		mode:     RuntimeModeLocal,
 		httpClient: &http.Client{
 			Timeout: 20 * time.Second,
 		},
@@ -105,61 +118,121 @@ func (c *CoreClient) Endpoint() string {
 	return c.endpoint
 }
 
+// Configure updates the runtime endpoint, mode, and optional token.
+func (c *CoreClient) Configure(config RuntimeConfig) {
+	c.endpoint = strings.TrimRight(config.Server, "/")
+	c.token = strings.TrimSpace(config.Token)
+	c.mode = strings.TrimSpace(config.Mode)
+	if c.mode == "" {
+		c.mode = RuntimeModeLocal
+	}
+}
+
+// Mode returns the active runtime mode.
+func (c *CoreClient) Mode() string {
+	if c.mode == "" {
+		return RuntimeModeLocal
+	}
+	return c.mode
+}
+
 // EnsureRuntime checks the runtime and attempts to start it if unavailable.
 func (c *CoreClient) EnsureRuntime() (*RuntimeStatus, error) {
-	if err := c.Ping(); err == nil {
+	health, err := c.Health()
+	if err == nil {
 		return &RuntimeStatus{
-			Online:   true,
-			Endpoint: c.endpoint,
-			Message:  "Connected to AWaN Core",
+			Online:        true,
+			Endpoint:      c.endpoint,
+			Message:       "Connected to AWaN Core",
+			Mode:          c.Mode(),
+			Version:       fallbackString(health.Version, "unknown"),
+			Authenticated: c.token != "" || strings.EqualFold(health.Auth, "none"),
+			AuthMode:      fallbackString(health.Auth, "unknown"),
 		}, nil
+	}
+
+	if c.Mode() == RuntimeModeRemote {
+		return &RuntimeStatus{
+			Online:        false,
+			Endpoint:      c.endpoint,
+			Message:       "Failed to connect to remote AWaN Core",
+			Mode:          c.Mode(),
+			Version:       "unknown",
+			Authenticated: false,
+			AuthMode:      "unknown",
+		}, err
 	}
 
 	if err := c.startCore(); err != nil {
 		return &RuntimeStatus{
-			Online:   false,
-			Endpoint: c.endpoint,
-			Message:  "AWaN Core is not running",
+			Online:        false,
+			Endpoint:      c.endpoint,
+			Message:       "AWaN Core is not running",
+			Mode:          c.Mode(),
+			Version:       "unknown",
+			Authenticated: false,
+			AuthMode:      "unknown",
 		}, err
 	}
 
 	deadline := time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
-		if err := c.Ping(); err == nil {
+		health, err := c.Health()
+		if err == nil {
 			return &RuntimeStatus{
-				Online:   true,
-				Endpoint: c.endpoint,
-				Message:  "Started AWaN Core automatically",
+				Online:        true,
+				Endpoint:      c.endpoint,
+				Message:       "Started AWaN Core automatically",
+				Mode:          c.Mode(),
+				Version:       fallbackString(health.Version, "unknown"),
+				Authenticated: c.token != "" || strings.EqualFold(health.Auth, "none"),
+				AuthMode:      fallbackString(health.Auth, "unknown"),
 			}, nil
 		}
 		time.Sleep(500 * time.Millisecond)
 	}
 
 	return &RuntimeStatus{
-		Online:   false,
-		Endpoint: c.endpoint,
-		Message:  "Timed out waiting for AWaN Core",
+		Online:        false,
+		Endpoint:      c.endpoint,
+		Message:       "Timed out waiting for AWaN Core",
+		Mode:          c.Mode(),
+		Version:       "unknown",
+		Authenticated: false,
+		AuthMode:      "unknown",
 	}, errors.New("timed out waiting for AWaN Core")
 }
 
 // Ping checks the runtime health endpoint.
 func (c *CoreClient) Ping() error {
+	_, err := c.Health()
+	return err
+}
+
+// Health returns the runtime health payload.
+func (c *CoreClient) Health() (*HealthResponse, error) {
 	req, err := http.NewRequest(http.MethodGet, c.endpoint+"/healthz", nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
+	c.applyAuth(req)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 300 {
-		return fmt.Errorf("runtime health check failed with status %s", resp.Status)
+		return nil, fmt.Errorf("runtime health check failed with status %s", resp.Status)
 	}
 
-	return nil
+	var health HealthResponse
+	if err := json.NewDecoder(resp.Body).Decode(&health); err != nil {
+		return nil, err
+	}
+
+	return &health, nil
 }
 
 // RunAgent sends a prompt to the runtime.
@@ -189,6 +262,7 @@ func (c *CoreClient) GetMemory(agent string) (*MemorySnapshot, error) {
 	if err != nil {
 		return nil, err
 	}
+	c.applyAuth(req)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -214,6 +288,7 @@ func (c *CoreClient) ListAgents() ([]AgentDefinition, error) {
 	if err != nil {
 		return nil, err
 	}
+	c.applyAuth(req)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -246,6 +321,7 @@ func (c *CoreClient) ListFiles() ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
+	c.applyAuth(req)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -276,6 +352,7 @@ func (c *CoreClient) ListPlugins() ([]PluginDefinition, error) {
 	if err != nil {
 		return nil, err
 	}
+	c.applyAuth(req)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -303,6 +380,7 @@ func (c *CoreClient) ListRegistryPlugins() ([]PluginDefinition, error) {
 	if err != nil {
 		return nil, err
 	}
+	c.applyAuth(req)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -331,6 +409,7 @@ func (c *CoreClient) SearchPlugins(query string) ([]PluginDefinition, error) {
 	if err != nil {
 		return nil, err
 	}
+	c.applyAuth(req)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -383,6 +462,7 @@ func (c *CoreClient) doJSON(method, path string, body any, target any) error {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	c.applyAuth(req)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -395,6 +475,12 @@ func (c *CoreClient) doJSON(method, path string, body any, target any) error {
 	}
 
 	return json.NewDecoder(resp.Body).Decode(target)
+}
+
+func (c *CoreClient) applyAuth(req *http.Request) {
+	if strings.TrimSpace(c.token) != "" {
+		req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(c.token))
+	}
 }
 
 func (c *CoreClient) startCore() error {
@@ -457,4 +543,11 @@ func possibleCoreDirs() []string {
 	}
 
 	return result
+}
+
+func fallbackString(value, fallback string) string {
+	if strings.TrimSpace(value) == "" {
+		return fallback
+	}
+	return strings.TrimSpace(value)
 }
