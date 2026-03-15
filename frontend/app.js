@@ -5,7 +5,11 @@ const state = {
 	agents: [],
 	memory: null,
 	files: [],
-	messages: []
+	messages: [],
+	page: 'chat',
+	installedPlugins: [],
+	availablePlugins: [],
+	pluginQuery: ''
 };
 
 const elements = {
@@ -22,7 +26,15 @@ const elements = {
 	filesPanel: document.getElementById('files-panel'),
 	refreshAgents: document.getElementById('refresh-agents'),
 	refreshMemory: document.getElementById('refresh-memory'),
-	refreshFiles: document.getElementById('refresh-files')
+	refreshFiles: document.getElementById('refresh-files'),
+	chatPage: document.getElementById('chat-page'),
+	pluginsPage: document.getElementById('plugins-page'),
+	navItems: document.querySelectorAll('[data-page]'),
+	installedPlugins: document.getElementById('installed-plugins'),
+	availablePlugins: document.getElementById('available-plugins'),
+	refreshPlugins: document.getElementById('refresh-plugins'),
+	pluginSearchInput: document.getElementById('plugin-search-input'),
+	pluginSearchButton: document.getElementById('plugin-search-button')
 };
 
 async function bootstrap() {
@@ -37,7 +49,7 @@ async function bootstrap() {
 		}
 
 		render();
-		await Promise.all([refreshMemory(), refreshFiles()]);
+		await Promise.all([refreshMemory(), refreshFiles(), refreshPlugins()]);
 	} catch (error) {
 		state.status = {
 			online: false,
@@ -49,11 +61,23 @@ async function bootstrap() {
 }
 
 function render() {
+	renderPage();
 	renderStatus();
 	renderAgents();
 	renderChat();
 	renderMemory();
 	renderFiles();
+	renderInstalledPlugins();
+	renderAvailablePlugins();
+}
+
+function renderPage() {
+	const isChat = state.page === 'chat';
+	elements.chatPage.classList.toggle('active', isChat);
+	elements.pluginsPage.classList.toggle('active', !isChat);
+	elements.navItems.forEach((item) => {
+		item.classList.toggle('active', item.getAttribute('data-page') === state.page);
+	});
 }
 
 function renderStatus() {
@@ -175,6 +199,103 @@ function renderFiles() {
 		.join('');
 }
 
+function renderInstalledPlugins() {
+	if (!state.installedPlugins.length) {
+		elements.installedPlugins.innerHTML = '<div class="empty-state"><p>No plugins installed.</p></div>';
+		return;
+	}
+
+	elements.installedPlugins.innerHTML = state.installedPlugins
+		.map(
+			(plugin) => `
+				<div class="plugin-card">
+					<div class="plugin-card-head">
+						<div>
+							<strong>${escapeHTML(plugin.name)}</strong>
+							<p>${escapeHTML(plugin.description || 'AWaN plugin')}</p>
+						</div>
+						<div class="plugin-meta">
+							<span class="status-pill ${plugin.status === 'disabled' ? 'status-disabled' : ''}">${escapeHTML(plugin.status || 'enabled')}</span>
+							<span class="version-pill">${escapeHTML(plugin.version || 'unknown')}</span>
+						</div>
+					</div>
+					<div class="plugin-actions">
+						<button class="ghost plugin-toggle" data-plugin-toggle="${plugin.name}" data-plugin-status="${plugin.status || 'enabled'}">${plugin.status === 'disabled' ? 'Enable' : 'Disable'}</button>
+						<button class="ghost plugin-remove" data-plugin-remove="${plugin.name}">Remove</button>
+					</div>
+				</div>
+			`
+		)
+		.join('');
+
+	elements.installedPlugins.querySelectorAll('[data-plugin-toggle]').forEach((button) => {
+		button.addEventListener('click', async () => {
+			const name = button.getAttribute('data-plugin-toggle');
+			const status = button.getAttribute('data-plugin-status');
+			if (!name) {
+				return;
+			}
+			if (status === 'disabled') {
+				await window.go.ui.App.EnablePlugin(name);
+			} else {
+				await window.go.ui.App.DisablePlugin(name);
+			}
+			await refreshPlugins();
+		});
+	});
+
+	elements.installedPlugins.querySelectorAll('[data-plugin-remove]').forEach((button) => {
+		button.addEventListener('click', async () => {
+			const name = button.getAttribute('data-plugin-remove');
+			if (!name) {
+				return;
+			}
+			await window.go.ui.App.RemovePlugin(name);
+			await refreshPlugins();
+		});
+	});
+}
+
+function renderAvailablePlugins() {
+	if (!state.availablePlugins.length) {
+		elements.availablePlugins.innerHTML = '<div class="empty-state"><p>No plugins available from the registry.</p></div>';
+		return;
+	}
+
+	const installed = new Set(state.installedPlugins.map((plugin) => plugin.name.toLowerCase()));
+	elements.availablePlugins.innerHTML = state.availablePlugins
+		.map(
+			(plugin) => `
+				<div class="plugin-card">
+					<div class="plugin-card-head">
+						<div>
+							<strong>${escapeHTML(plugin.name)}</strong>
+							<p>${escapeHTML(plugin.description || 'AWaN plugin')}</p>
+						</div>
+						<div class="plugin-meta">
+							<span class="version-pill">${escapeHTML(plugin.version || 'unknown')}</span>
+						</div>
+					</div>
+					<div class="plugin-actions">
+						<button class="ghost plugin-install" data-plugin-install="${plugin.name}" ${installed.has(plugin.name.toLowerCase()) ? 'disabled' : ''}>${installed.has(plugin.name.toLowerCase()) ? 'Installed' : 'Install'}</button>
+					</div>
+				</div>
+			`
+		)
+		.join('');
+
+	elements.availablePlugins.querySelectorAll('[data-plugin-install]').forEach((button) => {
+		button.addEventListener('click', async () => {
+			const name = button.getAttribute('data-plugin-install');
+			if (!name) {
+				return;
+			}
+			await window.go.ui.App.InstallPlugin(name);
+			await refreshPlugins();
+		});
+	});
+}
+
 async function refreshAgents() {
 	state.agents = await window.go.ui.App.ListAgents();
 	if (state.agents.length > 0 && !state.agents.some((agent) => agent.name === state.currentAgent)) {
@@ -199,6 +320,22 @@ async function refreshFiles() {
 		renderFiles();
 	} catch (error) {
 		elements.filesPanel.innerHTML = `<div class="empty-state"><p>${escapeHTML(error.message || 'Failed to load files')}</p></div>`;
+	}
+}
+
+async function refreshPlugins() {
+	try {
+		const [installed, available] = await Promise.all([
+			window.go.ui.App.ListPlugins(),
+			state.pluginQuery ? window.go.ui.App.SearchPlugins(state.pluginQuery) : window.go.ui.App.ListAvailablePlugins()
+		]);
+		state.installedPlugins = installed || [];
+		state.availablePlugins = available || [];
+		renderInstalledPlugins();
+		renderAvailablePlugins();
+	} catch (error) {
+		elements.installedPlugins.innerHTML = `<div class="empty-state"><p>${escapeHTML(error.message || 'Failed to load plugins')}</p></div>`;
+		elements.availablePlugins.innerHTML = `<div class="empty-state"><p>${escapeHTML(error.message || 'Failed to load plugins')}</p></div>`;
 	}
 }
 
@@ -240,6 +377,21 @@ elements.chatForm.addEventListener('submit', async (event) => {
 elements.refreshAgents.addEventListener('click', refreshAgents);
 elements.refreshMemory.addEventListener('click', refreshMemory);
 elements.refreshFiles.addEventListener('click', refreshFiles);
+elements.refreshPlugins.addEventListener('click', refreshPlugins);
+elements.pluginSearchButton.addEventListener('click', async () => {
+	state.pluginQuery = elements.pluginSearchInput.value.trim();
+	await refreshPlugins();
+});
+
+elements.navItems.forEach((item) => {
+	item.addEventListener('click', async () => {
+		state.page = item.getAttribute('data-page') || 'chat';
+		renderPage();
+		if (state.page === 'plugins') {
+			await refreshPlugins();
+		}
+	});
+});
 
 function escapeHTML(value) {
 	return String(value)

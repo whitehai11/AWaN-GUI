@@ -28,6 +28,11 @@
 					<div id="agent-list" class="agent-list"></div>
 				</nav>
 
+				<div class="sidebar-nav">
+					<button class="nav-item active" data-page="chat">Chat</button>
+					<button class="nav-item" data-page="plugins">Plugins</button>
+				</div>
+
 				<div class="sidebar-footer">
 					<p class="footer-label">Runtime</p>
 					<p id="runtime-status" class="footer-status">Checking AWaN Core...</p>
@@ -35,31 +40,65 @@
 				</div>
 			</aside>
 
-			<main class="chat-column">
-				<header class="hero">
-					<div class="hero-copy">
-						<p class="eyebrow">Chat</p>
-						<h2 id="current-agent-label">Agent: default</h2>
-					</div>
-					<div class="hero-meta">
-						<span id="current-model-label" class="pill">Model: openai</span>
-						<span class="pill muted-pill">AWaN Core</span>
-					</div>
-				</header>
+			<main class="main-column">
+				<section id="chat-page" class="page active">
+					<header class="hero">
+						<div class="hero-copy">
+							<p class="eyebrow">Chat</p>
+							<h2 id="current-agent-label">Agent: default</h2>
+						</div>
+						<div class="hero-meta">
+							<span id="current-model-label" class="pill">Model: openai</span>
+							<span class="pill muted-pill">AWaN Core</span>
+						</div>
+					</header>
 
-				<section id="chat-log" class="chat-log">
-					<div class="empty-state">
-						<h3>Start a conversation</h3>
-						<p>Pick an agent from the left and send a prompt to AWaN Core.</p>
-					</div>
+					<section id="chat-log" class="chat-log">
+						<div class="empty-state">
+							<h3>Start a conversation</h3>
+							<p>Pick an agent from the left and send a prompt to AWaN Core.</p>
+						</div>
+					</section>
+
+					<form id="chat-form" class="composer">
+						<textarea id="prompt-input" rows="3" placeholder="Message AWaN"></textarea>
+						<div class="composer-actions">
+							<button type="submit" id="send-button">Send message</button>
+						</div>
+					</form>
 				</section>
 
-				<form id="chat-form" class="composer">
-					<textarea id="prompt-input" rows="3" placeholder="Message AWaN"></textarea>
-					<div class="composer-actions">
-						<button type="submit" id="send-button">Send message</button>
+				<section id="plugins-page" class="page">
+					<header class="hero">
+						<div class="hero-copy">
+							<p class="eyebrow">Plugins</p>
+							<h2>Plugin manager</h2>
+						</div>
+						<div class="hero-meta">
+							<input id="plugin-search-input" class="plugin-search-input" type="text" placeholder="Search registry plugins" />
+							<button id="plugin-search-button" class="ghost">Search</button>
+							<button id="refresh-plugins" class="ghost">Refresh</button>
+						</div>
+					</header>
+
+					<div class="plugin-layout">
+						<section class="panel side-panel">
+							<div class="panel-header">
+								<h2>Installed Plugins</h2>
+								<span class="section-meta">local</span>
+							</div>
+							<div id="installed-plugins" class="stack"></div>
+						</section>
+
+						<section class="panel side-panel">
+							<div class="panel-header">
+								<h2>Available Plugins</h2>
+								<span class="section-meta">registry</span>
+							</div>
+							<div id="available-plugins" class="stack"></div>
+						</section>
 					</div>
-				</form>
+				</section>
 			</main>
 
 			<aside class="context-column">

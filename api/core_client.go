@@ -73,6 +73,15 @@ type AgentDefinition struct {
 	Description string   `json:"description"`
 }
 
+// PluginDefinition is used for installed and available plugin views.
+type PluginDefinition struct {
+	Name        string `json:"name"`
+	Version     string `json:"version"`
+	Status      string `json:"status"`
+	Description string `json:"description"`
+	Repo        string `json:"repo"`
+}
+
 // NewCoreClient creates a client for the AWaN runtime.
 func NewCoreClient(endpoint string) *CoreClient {
 	base := strings.TrimSpace(endpoint)
@@ -259,6 +268,108 @@ func (c *CoreClient) ListFiles() ([]string, error) {
 	}
 
 	return payload.Files, nil
+}
+
+// ListPlugins returns installed runtime plugins.
+func (c *CoreClient) ListPlugins() ([]PluginDefinition, error) {
+	req, err := http.NewRequest(http.MethodGet, c.endpoint+"/plugins", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("plugin list request failed with status %s", resp.Status)
+	}
+
+	var payload struct {
+		Plugins []PluginDefinition `json:"plugins"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		return nil, err
+	}
+
+	return payload.Plugins, nil
+}
+
+// ListRegistryPlugins returns available plugins from the public registry.
+func (c *CoreClient) ListRegistryPlugins() ([]PluginDefinition, error) {
+	req, err := http.NewRequest(http.MethodGet, c.endpoint+"/plugins/registry", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("plugin registry request failed with status %s", resp.Status)
+	}
+
+	var payload struct {
+		Plugins []PluginDefinition `json:"plugins"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		return nil, err
+	}
+
+	return payload.Plugins, nil
+}
+
+// SearchPlugins searches the public plugin registry.
+func (c *CoreClient) SearchPlugins(query string) ([]PluginDefinition, error) {
+	path := "/plugins/search?q=" + url.QueryEscape(query)
+	req, err := http.NewRequest(http.MethodGet, c.endpoint+path, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("plugin search request failed with status %s", resp.Status)
+	}
+
+	var payload struct {
+		Plugins []PluginDefinition `json:"plugins"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		return nil, err
+	}
+
+	return payload.Plugins, nil
+}
+
+// InstallPlugin downloads and registers a plugin in the runtime.
+func (c *CoreClient) InstallPlugin(name string) error {
+	return c.doJSON(http.MethodPost, "/plugins/install", map[string]string{"name": name}, &map[string]any{})
+}
+
+// RemovePlugin deletes an installed plugin from the runtime.
+func (c *CoreClient) RemovePlugin(name string) error {
+	return c.doJSON(http.MethodDelete, "/plugins/remove", map[string]string{"name": name}, &map[string]any{})
+}
+
+// EnablePlugin re-enables an installed plugin.
+func (c *CoreClient) EnablePlugin(name string) error {
+	return c.doJSON(http.MethodPost, "/plugins/enable", map[string]string{"name": name}, &map[string]any{})
+}
+
+// DisablePlugin disables an installed plugin.
+func (c *CoreClient) DisablePlugin(name string) error {
+	return c.doJSON(http.MethodPost, "/plugins/disable", map[string]string{"name": name}, &map[string]any{})
 }
 
 func (c *CoreClient) doJSON(method, path string, body any, target any) error {

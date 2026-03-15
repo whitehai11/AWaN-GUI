@@ -107,6 +107,26 @@ button {
 	min-height: 0;
 }
 
+.sidebar-nav {
+	display: grid;
+	gap: 0.5rem;
+}
+
+.nav-item {
+	padding: 0.8rem 0.95rem;
+	border-radius: 12px;
+	text-align: left;
+	background: transparent;
+	color: var(--muted);
+	border: 1px solid transparent;
+}
+
+.nav-item.active {
+	background: #ffffff;
+	color: var(--ink);
+	border-color: var(--line-strong);
+}
+
 .section-header {
 	display: flex;
 	justify-content: space-between;
@@ -135,7 +155,7 @@ button {
 	font-size: 0.92rem;
 }
 
-.chat-column,
+.main-column,
 .context-column {
 	padding: 1rem;
 	display: grid;
@@ -144,8 +164,19 @@ button {
 	min-height: 0;
 }
 
-.chat-column {
+.main-column {
+	min-height: 0;
+}
+
+.page {
+	display: none;
+	height: 100%;
 	grid-template-rows: auto minmax(0, 1fr) auto;
+	gap: 1rem;
+}
+
+.page.active {
+	display: grid;
 }
 
 .context-column {
@@ -351,6 +382,63 @@ button.ghost {
 	min-height: 0;
 }
 
+.plugin-layout {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 1rem;
+	min-height: 0;
+}
+
+.plugin-search-input {
+	padding: 0.72rem 0.9rem;
+	border-radius: 999px;
+	border: 1px solid var(--line);
+	background: #fafafa;
+	min-width: 220px;
+}
+
+.plugin-card {
+	padding: 0.95rem 1rem;
+	border-radius: var(--radius-sm);
+	border: 1px solid var(--line);
+	background: var(--surface-soft);
+	display: grid;
+	gap: 0.9rem;
+}
+
+.plugin-card-head {
+	display: flex;
+	justify-content: space-between;
+	gap: 1rem;
+	align-items: start;
+}
+
+.plugin-card-head p {
+	margin: 0.25rem 0 0;
+	color: var(--muted);
+}
+
+.plugin-meta,
+.plugin-actions {
+	display: flex;
+	gap: 0.5rem;
+	flex-wrap: wrap;
+}
+
+.status-pill,
+.version-pill {
+	padding: 0.38rem 0.65rem;
+	border-radius: 999px;
+	border: 1px solid var(--line);
+	background: #fff;
+	font-size: 0.82rem;
+}
+
+.status-disabled {
+	background: #f3f3f3;
+	color: var(--muted);
+}
+
 .empty-state {
 	text-align: center;
 	padding: 2rem 1.2rem;
@@ -371,12 +459,16 @@ button.ghost {
 	}
 
 	.sidebar,
-	.chat-column,
+	.main-column,
 	.context-column {
 		padding: 1rem;
 	}
 
 	.context-column {
+		grid-template-columns: 1fr;
+	}
+
+	.plugin-layout {
 		grid-template-columns: 1fr;
 	}
 
