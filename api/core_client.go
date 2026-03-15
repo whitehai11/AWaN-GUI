@@ -1,0 +1,349 @@
+package api
+
+import (
+	"bytes"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net/http"
+	"net/url"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"time"
+)
+
+const defaultEndpoint = "http://localhost:7452"
+
+// CoreClient talks to the AWaN Core runtime.
+type CoreClient struct {
+	endpoint   string
+	httpClient *http.Client
+}
+
+// RuntimeStatus describes the local runtime connection state.
+type RuntimeStatus struct {
+	Online   bool   `json:"online"`
+	Endpoint string `json:"endpoint"`
+	Message  string `json:"message"`
+}
+
+// AgentRunRequest is sent to /agent/run.
+type AgentRunRequest struct {
+	Agent  string `json:"agent"`
+	Model  string `json:"model,omitempty"`
+	Prompt string `json:"prompt"`
+}
+
+// AgentRunResponse is returned from /agent/run.
+type AgentRunResponse struct {
+	Agent     string `json:"agent"`
+	Model     string `json:"model"`
+	Output    string `json:"output"`
+	StartedAt string `json:"startedAt"`
+	EndedAt   string `json:"endedAt"`
+}
+
+// MemoryRecord is returned from the runtime memory APIs.
+type MemoryRecord struct {
+	ID        string   `json:"id"`
+	Agent     string   `json:"agent"`
+	Role      string   `json:"role"`
+	Content   string   `json:"content"`
+	Tags      []string `json:"tags"`
+	CreatedAt string   `json:"createdAt"`
+}
+
+// MemorySnapshot contains the current memory state for an agent.
+type MemorySnapshot struct {
+	Agent      string         `json:"agent"`
+	ShortTerm  []MemoryRecord `json:"shortTerm"`
+	LongTerm   []MemoryRecord `json:"longTerm"`
+	StoredAt   string         `json:"storedAt"`
+	Vectorized bool           `json:"vectorized"`
+}
+
+// AgentDefinition is the minimal agent info used by the GUI.
+type AgentDefinition struct {
+	Name        string   `json:"name"`
+	Model       string   `json:"model"`
+	Memory      bool     `json:"memory"`
+	Tools       []string `json:"tools"`
+	Description string   `json:"description"`
+}
+
+// NewCoreClient creates a client for the AWaN runtime.
+func NewCoreClient(endpoint string) *CoreClient {
+	base := strings.TrimSpace(endpoint)
+	if base == "" {
+		base = strings.TrimSpace(os.Getenv("AWAN_CORE_URL"))
+	}
+	if base == "" {
+		base = defaultEndpoint
+	}
+
+	return &CoreClient{
+		endpoint: strings.TrimRight(base, "/"),
+		httpClient: &http.Client{
+			Timeout: 20 * time.Second,
+		},
+	}
+}
+
+// Endpoint returns the configured runtime URL.
+func (c *CoreClient) Endpoint() string {
+	return c.endpoint
+}
+
+// EnsureRuntime checks the runtime and attempts to start it if unavailable.
+func (c *CoreClient) EnsureRuntime() (*RuntimeStatus, error) {
+	if err := c.Ping(); err == nil {
+		return &RuntimeStatus{
+			Online:   true,
+			Endpoint: c.endpoint,
+			Message:  "Connected to AWaN Core",
+		}, nil
+	}
+
+	if err := c.startCore(); err != nil {
+		return &RuntimeStatus{
+			Online:   false,
+			Endpoint: c.endpoint,
+			Message:  "AWaN Core is not running",
+		}, err
+	}
+
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		if err := c.Ping(); err == nil {
+			return &RuntimeStatus{
+				Online:   true,
+				Endpoint: c.endpoint,
+				Message:  "Started AWaN Core automatically",
+			}, nil
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+
+	return &RuntimeStatus{
+		Online:   false,
+		Endpoint: c.endpoint,
+		Message:  "Timed out waiting for AWaN Core",
+	}, errors.New("timed out waiting for AWaN Core")
+}
+
+// Ping checks the runtime health endpoint.
+func (c *CoreClient) Ping() error {
+	req, err := http.NewRequest(http.MethodGet, c.endpoint+"/healthz", nil)
+	if err != nil {
+		return err
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 300 {
+		return fmt.Errorf("runtime health check failed with status %s", resp.Status)
+	}
+
+	return nil
+}
+
+// RunAgent sends a prompt to the runtime.
+func (c *CoreClient) RunAgent(prompt, agent, model string) (*AgentRunResponse, error) {
+	payload := AgentRunRequest{
+		Agent:  agent,
+		Model:  model,
+		Prompt: prompt,
+	}
+
+	var response AgentRunResponse
+	if err := c.doJSON(http.MethodPost, "/agent/run", payload, &response); err != nil {
+		return nil, err
+	}
+
+	return &response, nil
+}
+
+// GetMemory fetches the memory snapshot for an agent.
+func (c *CoreClient) GetMemory(agent string) (*MemorySnapshot, error) {
+	path := "/memory"
+	if strings.TrimSpace(agent) != "" {
+		path += "?agent=" + url.QueryEscape(agent)
+	}
+
+	req, err := http.NewRequest(http.MethodGet, c.endpoint+path, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("memory request failed with status %s", resp.Status)
+	}
+
+	var snapshot MemorySnapshot
+	if err := json.NewDecoder(resp.Body).Decode(&snapshot); err != nil {
+		return nil, err
+	}
+
+	return &snapshot, nil
+}
+
+// ListAgents returns runtime agent definitions when available.
+func (c *CoreClient) ListAgents() ([]AgentDefinition, error) {
+	req, err := http.NewRequest(http.MethodGet, c.endpoint+"/agents", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return []AgentDefinition{
+			{Name: "default", Model: "openai", Memory: true, Tools: []string{"filesystem", "memory"}, Description: "Default AWaN agent"},
+		}, nil
+	}
+	if resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("agent list request failed with status %s", resp.Status)
+	}
+
+	var payload struct {
+		Agents []AgentDefinition `json:"agents"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		return nil, err
+	}
+
+	return payload.Agents, nil
+}
+
+// ListFiles returns the lightweight runtime file listing when available.
+func (c *CoreClient) ListFiles() ([]string, error) {
+	req, err := http.NewRequest(http.MethodGet, c.endpoint+"/files", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return []string{}, nil
+	}
+	if resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("file list request failed with status %s", resp.Status)
+	}
+
+	var payload struct {
+		Files []string `json:"files"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		return nil, err
+	}
+
+	return payload.Files, nil
+}
+
+func (c *CoreClient) doJSON(method, path string, body any, target any) error {
+	data, err := json.Marshal(body)
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequest(method, c.endpoint+path, bytes.NewReader(data))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 300 {
+		return fmt.Errorf("%s request failed with status %s", path, resp.Status)
+	}
+
+	return json.NewDecoder(resp.Body).Decode(target)
+}
+
+func (c *CoreClient) startCore() error {
+	repoDirs := possibleCoreDirs()
+	candidates := []struct {
+		command string
+		args    []string
+		dir     string
+	}{
+		{command: "awan"},
+	}
+
+	for _, dir := range repoDirs {
+		candidates = append(candidates, struct {
+			command string
+			args    []string
+			dir     string
+		}{
+			command: "go",
+			args:    []string{"run", "."},
+			dir:     dir,
+		})
+	}
+
+	for _, candidate := range candidates {
+		cmd := exec.Command(candidate.command, candidate.args...)
+		if candidate.dir != "" {
+			cmd.Dir = candidate.dir
+		}
+		if err := cmd.Start(); err == nil {
+			return nil
+		}
+	}
+
+	return errors.New("failed to start AWaN Core automatically")
+}
+
+func possibleCoreDirs() []string {
+	dirs := []string{}
+
+	if workingDir, err := os.Getwd(); err == nil {
+		dirs = append(dirs, filepath.Clean(filepath.Join(workingDir, "..", "AWaN")))
+	}
+
+	if exePath, err := os.Executable(); err == nil {
+		exeDir := filepath.Dir(exePath)
+		dirs = append(dirs, filepath.Clean(filepath.Join(exeDir, "..", "AWaN")))
+	}
+
+	seen := map[string]bool{}
+	result := make([]string, 0, len(dirs))
+	for _, dir := range dirs {
+		if dir == "" || seen[dir] {
+			continue
+		}
+		if info, err := os.Stat(dir); err == nil && info.IsDir() {
+			seen[dir] = true
+			result = append(result, dir)
+		}
+	}
+
+	return result
+}

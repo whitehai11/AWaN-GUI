@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>AWaN GUI</title>
+		<link rel="stylesheet" href="./styles.css" />
+	</head>
+	<body>
+		<div class="shell">
+			<aside class="sidebar">
+				<div class="brand">
+					<p>AWaN</p>
+					<h1>Desktop Console</h1>
+				</div>
+
+				<div class="panel">
+					<div class="panel-header">
+						<h2>Agents</h2>
+						<button id="refresh-agents" class="ghost">Refresh</button>
+					</div>
+					<div id="agent-list" class="agent-list"></div>
+				</div>
+
+				<div class="panel status-panel">
+					<h2>Runtime</h2>
+					<p id="runtime-status">Checking AWaN Core…</p>
+					<p id="runtime-endpoint" class="muted"></p>
+				</div>
+			</aside>
+
+			<main class="chat-column">
+				<header class="hero">
+					<div>
+						<p class="eyebrow">AWaN Core</p>
+						<h2>Agent chat</h2>
+					</div>
+					<div class="selection">
+						<span id="current-agent-label">Agent: default</span>
+						<span id="current-model-label">Model: openai</span>
+					</div>
+				</header>
+
+				<section id="chat-log" class="chat-log">
+					<div class="empty-state">
+						<p>No conversation yet.</p>
+						<p>When AWaN Core is available, send a prompt to start chatting.</p>
+					</div>
+				</section>
+
+				<form id="chat-form" class="composer">
+					<textarea id="prompt-input" rows="4" placeholder="Ask AWaN something useful..."></textarea>
+					<div class="composer-actions">
+						<button type="submit" id="send-button">Send</button>
+					</div>
+				</form>
+			</main>
+
+			<aside class="context-column">
+				<section class="panel">
+					<div class="panel-header">
+						<h2>Memory</h2>
+						<button id="refresh-memory" class="ghost">Refresh</button>
+					</div>
+					<div id="memory-panel" class="stack"></div>
+				</section>
+
+				<section class="panel">
+					<div class="panel-header">
+						<h2>Files</h2>
+						<button id="refresh-files" class="ghost">Refresh</button>
+					</div>
+					<div id="files-panel" class="stack"></div>
+				</section>
+			</aside>
+		</div>
+
+		<script src="./app.js"></script>
+	</body>
+</html>
