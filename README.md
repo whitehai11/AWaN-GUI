@@ -84,3 +84,19 @@ To disable auto updates for AWaN apps:
 ```text
 auto_update = false
 ```
+
+## GitHub Releases
+
+AWaN-GUI includes an automated GitHub Actions release pipeline in [build-release.yml](C:\Users\maro\Desktop\AWaN-GUI\.github\workflows\build-release.yml).
+
+When code is pushed to `main`, GitHub Actions will:
+
+- build a Windows desktop executable
+- build a Linux desktop binary
+- copy both outputs into `dist/`
+- create a GitHub Release named `Build <run_number>`
+- upload both binaries as release assets using the tag `auto-<run_number>`
+
+To trigger an automatic release, push or merge a commit into the `main` branch.
+
+If you want to switch from push-based releases to git-tag versioning later, change the workflow trigger from branch pushes to tag pushes such as `v*`, then use `${{ github.ref_name }}` for the release tag and release name.

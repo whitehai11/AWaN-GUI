@@ -1,4 +1,6 @@
-bin
-build
-frontend/dist
-wailsjs
+bin/
+build/
+dist/
+frontend/dist/
+wailsjs/
+*.exe
