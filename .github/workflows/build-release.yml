@@ -21,7 +21,7 @@ jobs:
             goarch: amd64
             output: awan-gui-windows-amd64.exe
             built_binary: build/bin/AWaN-GUI.exe
-          - runner: ubuntu-latest
+          - runner: ubuntu-22.04
             goos: linux
             goarch: amd64
             output: awan-gui-linux-amd64
