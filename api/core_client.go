@@ -92,6 +92,8 @@ type PluginDefinition struct {
 	Status      string `json:"status"`
 	Description string `json:"description"`
 	Repo        string `json:"repo"`
+	SourceType  string   `json:"sourceType"`
+	Tools       []string `json:"tools"`
 }
 
 // NewCoreClient creates a client for the AWaN runtime.
@@ -434,6 +436,11 @@ func (c *CoreClient) SearchPlugins(query string) ([]PluginDefinition, error) {
 // InstallPlugin downloads and registers a plugin in the runtime.
 func (c *CoreClient) InstallPlugin(name string) error {
 	return c.doJSON(http.MethodPost, "/plugins/install", map[string]string{"name": name}, &map[string]any{})
+}
+
+// InstallCustomPlugin installs a plugin directly from a GitHub repository URL.
+func (c *CoreClient) InstallCustomPlugin(repo string) error {
+	return c.doJSON(http.MethodPost, "/plugins/install", map[string]string{"repo": repo}, &map[string]any{})
 }
 
 // RemovePlugin deletes an installed plugin from the runtime.

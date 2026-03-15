@@ -8,7 +8,7 @@ const state = {
 	messages: [],
 	page: 'chat',
 	installedPlugins: [],
-	availablePlugins: [],
+	officialPlugins: [],
 	pluginQuery: '',
 	setupRequired: false,
 	runtimeConfig: {
@@ -21,14 +21,10 @@ const state = {
 const elements = {
 	setupScreen: document.getElementById('setup-screen'),
 	setupStatus: document.getElementById('setup-status'),
-	modeLocal: document.getElementById('mode-local'),
-	modeRemote: document.getElementById('mode-remote'),
 	runtimeServerInput: document.getElementById('runtime-server-input'),
 	runtimeTokenInput: document.getElementById('runtime-token-input'),
 	testRuntimeButton: document.getElementById('test-runtime-button'),
 	saveRuntimeButton: document.getElementById('save-runtime-button'),
-	settingsModeLocal: document.getElementById('settings-mode-local'),
-	settingsModeRemote: document.getElementById('settings-mode-remote'),
 	settingsServerInput: document.getElementById('settings-server-input'),
 	settingsTokenInput: document.getElementById('settings-token-input'),
 	settingsStatus: document.getElementById('settings-status'),
@@ -56,9 +52,14 @@ const elements = {
 	navItems: document.querySelectorAll('[data-page]'),
 	installedPlugins: document.getElementById('installed-plugins'),
 	availablePlugins: document.getElementById('available-plugins'),
+	customPlugins: document.getElementById('custom-plugins'),
 	refreshPlugins: document.getElementById('refresh-plugins'),
 	pluginSearchInput: document.getElementById('plugin-search-input'),
-	pluginSearchButton: document.getElementById('plugin-search-button')
+	pluginSearchButton: document.getElementById('plugin-search-button'),
+	customPluginInput: document.getElementById('custom-plugin-input'),
+	customPluginInstall: document.getElementById('custom-plugin-install'),
+	runtimeModeButtons: document.querySelectorAll('[data-runtime-mode]'),
+	settingsModeButtons: document.querySelectorAll('[data-settings-mode]')
 };
 
 async function bootstrap() {
@@ -69,13 +70,12 @@ async function bootstrap() {
 		state.status = result.status;
 		state.agents = result.agents || [];
 
-		applyRuntimeConfigToForm();
-
 		if (state.agents.length > 0) {
 			state.currentAgent = state.agents[0].name;
 			state.currentModel = state.agents[0].model;
 		}
 
+		applyRuntimeConfigToForm();
 		render();
 
 		if (!state.setupRequired && state.status?.online) {
@@ -106,14 +106,15 @@ function render() {
 	renderMemory();
 	renderFiles();
 	renderInstalledPlugins();
-	renderAvailablePlugins();
+	renderOfficialPlugins();
+	renderCustomPlugins();
 	renderSettings();
 }
 
 function renderSetup() {
 	elements.setupScreen.classList.toggle('hidden', !state.setupRequired);
-	toggleModeButtons('[data-runtime-mode]', state.runtimeConfig.mode);
-	toggleModeButtons('[data-settings-mode]', state.runtimeConfig.mode);
+	toggleModeButtons(elements.runtimeModeButtons, state.runtimeConfig.mode);
+	toggleModeButtons(elements.settingsModeButtons, state.runtimeConfig.mode);
 	applyModeFieldState();
 }
 
@@ -128,19 +129,18 @@ function renderPage() {
 }
 
 function renderStatus() {
-	const status = state.status;
-	if (!status) {
+	if (!state.status) {
 		elements.runtimeStatus.textContent = 'Waiting for runtime setup...';
 		elements.runtimeEndpoint.textContent = '';
 		return;
 	}
 
-	elements.runtimeStatus.textContent = status.message;
-	elements.runtimeEndpoint.textContent = `${status.endpoint} · ${status.mode || 'local'} · auth ${status.authMode || 'unknown'}`;
+	elements.runtimeStatus.textContent = state.status.message;
+	elements.runtimeEndpoint.textContent = `${state.status.endpoint} · ${state.status.mode || 'local'} · auth ${state.status.authMode || 'unknown'}`;
 	elements.currentAgentLabel.textContent = `Agent: ${state.currentAgent}`;
 	elements.currentModelLabel.textContent = `Model: ${state.currentModel}`;
 	elements.runtimeModePill.textContent = `Mode: ${state.runtimeConfig.mode || 'local'}`;
-	elements.runtimeVersionPill.textContent = `Version: ${status.version || 'unknown'}`;
+	elements.runtimeVersionPill.textContent = `Version: ${state.status.version || 'unknown'}`;
 }
 
 function renderAgents() {
@@ -201,19 +201,12 @@ function renderMemory() {
 		return;
 	}
 
-	const shortTerm = renderMemorySection('Short term', state.memory.shortTerm);
-	const longTerm = renderMemorySection('Long term', state.memory.longTerm);
-	elements.memoryPanel.innerHTML = shortTerm + longTerm;
+	elements.memoryPanel.innerHTML = renderMemorySection('Short term', state.memory.shortTerm) + renderMemorySection('Long term', state.memory.longTerm);
 }
 
 function renderMemorySection(title, records) {
 	if (!records || records.length === 0) {
-		return `
-			<div class="record">
-				<strong>${title}</strong>
-				<p>No entries.</p>
-			</div>
-		`;
+		return `<div class="record"><strong>${title}</strong><p>No entries.</p></div>`;
 	}
 
 	return `
@@ -238,13 +231,7 @@ function renderFiles() {
 	}
 
 	elements.filesPanel.innerHTML = state.files
-		.map(
-			(file) => `
-				<div class="file-item">
-					<strong>${escapeHTML(file)}</strong>
-				</div>
-			`
-		)
+		.map((file) => `<div class="file-item"><strong>${escapeHTML(file)}</strong></div>`)
 		.join('');
 }
 
@@ -262,6 +249,7 @@ function renderInstalledPlugins() {
 						<div>
 							<strong>${escapeHTML(plugin.name)}</strong>
 							<p>${escapeHTML(plugin.description || 'AWaN plugin')}</p>
+							<p class="plugin-subtle">${escapeHTML(plugin.sourceType || 'unknown')} ${plugin.repo ? `· ${escapeHTML(plugin.repo)}` : ''}</p>
 						</div>
 						<div class="plugin-meta">
 							<span class="status-pill ${plugin.status === 'disabled' ? 'status-disabled' : ''}">${escapeHTML(plugin.status || 'enabled')}</span>
@@ -305,21 +293,22 @@ function renderInstalledPlugins() {
 	});
 }
 
-function renderAvailablePlugins() {
-	if (!state.availablePlugins.length) {
-		elements.availablePlugins.innerHTML = '<div class="empty-state"><p>No plugins available from the registry.</p></div>';
+function renderOfficialPlugins() {
+	if (!state.officialPlugins.length) {
+		elements.availablePlugins.innerHTML = '<div class="empty-state"><p>No official plugins available.</p></div>';
 		return;
 	}
 
 	const installed = new Set(state.installedPlugins.map((plugin) => plugin.name.toLowerCase()));
-	elements.availablePlugins.innerHTML = state.availablePlugins
+	elements.availablePlugins.innerHTML = state.officialPlugins
 		.map(
 			(plugin) => `
 				<div class="plugin-card">
 					<div class="plugin-card-head">
 						<div>
 							<strong>${escapeHTML(plugin.name)}</strong>
-							<p>${escapeHTML(plugin.description || 'AWaN plugin')}</p>
+							<p>${escapeHTML(plugin.description || 'Official AWaN plugin')}</p>
+							<p class="plugin-subtle">${escapeHTML(plugin.repo || '')}</p>
 						</div>
 						<div class="plugin-meta">
 							<span class="version-pill">${escapeHTML(plugin.version || 'unknown')}</span>
@@ -343,6 +332,32 @@ function renderAvailablePlugins() {
 			await refreshPlugins();
 		});
 	});
+}
+
+function renderCustomPlugins() {
+	const customInstalled = state.installedPlugins.filter((plugin) => plugin.sourceType === 'custom');
+	if (!customInstalled.length) {
+		elements.customPlugins.innerHTML = '<div class="empty-state"><p>No custom plugins installed yet.</p></div>';
+		return;
+	}
+
+	elements.customPlugins.innerHTML = customInstalled
+		.map(
+			(plugin) => `
+				<div class="plugin-card">
+					<div class="plugin-card-head">
+						<div>
+							<strong>${escapeHTML(plugin.name)}</strong>
+							<p>${escapeHTML(plugin.repo || 'Custom GitHub repository')}</p>
+						</div>
+						<div class="plugin-meta">
+							<span class="version-pill">${escapeHTML(plugin.version || 'unknown')}</span>
+						</div>
+					</div>
+				</div>
+			`
+		)
+		.join('');
 }
 
 function renderSettings() {
@@ -379,17 +394,20 @@ async function refreshFiles() {
 
 async function refreshPlugins() {
 	try {
-		const [installed, available] = await Promise.all([
+		const [installed, official] = await Promise.all([
 			window.go.ui.App.ListPlugins(),
 			state.pluginQuery ? window.go.ui.App.SearchPlugins(state.pluginQuery) : window.go.ui.App.ListAvailablePlugins()
 		]);
 		state.installedPlugins = installed || [];
-		state.availablePlugins = available || [];
+		state.officialPlugins = official || [];
 		renderInstalledPlugins();
-		renderAvailablePlugins();
+		renderOfficialPlugins();
+		renderCustomPlugins();
 	} catch (error) {
-		elements.installedPlugins.innerHTML = `<div class="empty-state"><p>${escapeHTML(error.message || 'Failed to load plugins')}</p></div>`;
-		elements.availablePlugins.innerHTML = `<div class="empty-state"><p>${escapeHTML(error.message || 'Failed to load plugins')}</p></div>`;
+		const message = escapeHTML(error.message || 'Failed to load plugins');
+		elements.installedPlugins.innerHTML = `<div class="empty-state"><p>${message}</p></div>`;
+		elements.availablePlugins.innerHTML = `<div class="empty-state"><p>${message}</p></div>`;
+		elements.customPlugins.innerHTML = `<div class="empty-state"><p>${message}</p></div>`;
 	}
 }
 
@@ -452,16 +470,14 @@ function applyRuntimeConfigToForm() {
 
 function applyModeFieldState() {
 	const isLocal = state.runtimeConfig.mode === 'local';
-	elements.runtimeServerInput.value = state.runtimeConfig.server || 'http://localhost:7452';
-	elements.settingsServerInput.value = state.runtimeConfig.server || 'http://localhost:7452';
 	elements.runtimeServerInput.disabled = isLocal;
-	elements.runtimeTokenInput.disabled = false;
 	elements.settingsServerInput.disabled = isLocal;
 }
 
-function toggleModeButtons(selector, activeMode) {
-	document.querySelectorAll(selector).forEach((button) => {
-		button.classList.toggle('active', button.getAttribute(button.dataset.runtimeMode ? 'data-runtime-mode' : 'data-settings-mode') === activeMode);
+function toggleModeButtons(buttons, activeMode) {
+	buttons.forEach((button) => {
+		const mode = button.getAttribute('data-runtime-mode') || button.getAttribute('data-settings-mode');
+		button.classList.toggle('active', mode === activeMode);
 	});
 }
 
@@ -475,17 +491,13 @@ function setRuntimeMode(mode) {
 
 elements.chatForm.addEventListener('submit', async (event) => {
 	event.preventDefault();
-
 	const prompt = elements.promptInput.value.trim();
 	if (!prompt) {
 		return;
 	}
 
 	elements.sendButton.disabled = true;
-	state.messages.push({
-		role: 'user',
-		content: prompt
-	});
+	state.messages.push({ role: 'user', content: prompt });
 	renderChat();
 	elements.chatLog.scrollTop = elements.chatLog.scrollHeight;
 	elements.promptInput.value = '';
@@ -497,10 +509,7 @@ elements.chatForm.addEventListener('submit', async (event) => {
 		elements.chatLog.scrollTop = elements.chatLog.scrollHeight;
 		await refreshMemory();
 	} catch (error) {
-		state.messages.push({
-			role: 'assistant',
-			content: `Error: ${error.message || 'Failed to contact runtime'}`
-		});
+		state.messages.push({ role: 'assistant', content: `Error: ${error.message || 'Failed to contact runtime'}` });
 		renderChat();
 		elements.chatLog.scrollTop = elements.chatLog.scrollHeight;
 	} finally {
@@ -516,6 +525,15 @@ elements.pluginSearchButton.addEventListener('click', async () => {
 	state.pluginQuery = elements.pluginSearchInput.value.trim();
 	await refreshPlugins();
 });
+elements.customPluginInstall.addEventListener('click', async () => {
+	const repo = elements.customPluginInput.value.trim();
+	if (!repo) {
+		return;
+	}
+	await window.go.ui.App.InstallCustomPlugin(repo);
+	elements.customPluginInput.value = '';
+	await refreshPlugins();
+});
 
 elements.navItems.forEach((item) => {
 	item.addEventListener('click', async () => {
@@ -527,11 +545,10 @@ elements.navItems.forEach((item) => {
 	});
 });
 
-document.querySelectorAll('[data-runtime-mode]').forEach((button) => {
+elements.runtimeModeButtons.forEach((button) => {
 	button.addEventListener('click', () => setRuntimeMode(button.getAttribute('data-runtime-mode') || 'local'));
 });
-
-document.querySelectorAll('[data-settings-mode]').forEach((button) => {
+elements.settingsModeButtons.forEach((button) => {
 	button.addEventListener('click', () => setRuntimeMode(button.getAttribute('data-settings-mode') || 'local'));
 });
 

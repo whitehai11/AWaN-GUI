@@ -25,6 +25,14 @@ func (a *App) InstallPlugin(name string) map[string]string {
 	return map[string]string{"status": "ok", "message": "Plugin installed"}
 }
 
+// InstallCustomPlugin installs a plugin directly from a GitHub repository.
+func (a *App) InstallCustomPlugin(repo string) map[string]string {
+	if err := a.client.InstallCustomPlugin(repo); err != nil {
+		return map[string]string{"status": "error", "message": err.Error()}
+	}
+	return map[string]string{"status": "ok", "message": "Custom plugin installed"}
+}
+
 // RemovePlugin removes an installed plugin.
 func (a *App) RemovePlugin(name string) map[string]string {
 	if err := a.client.RemovePlugin(name); err != nil {
