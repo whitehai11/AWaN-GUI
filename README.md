@@ -73,7 +73,7 @@ wails build
 
 ## Auto Updates
 
-AWaN-GUI defines a local version constant and checks the latest GitHub release for `awan/gui` in the background at startup.
+AWaN-GUI defines a local version constant and checks the latest GitHub release for `whitehai11/AWaN-GUI` in the background at startup.
 
 To disable auto updates for AWaN apps:
 

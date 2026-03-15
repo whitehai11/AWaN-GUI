@@ -10,9 +10,9 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 
-	"github.com/awan/awan-gui/api"
-	"github.com/awan/awan-gui/internal/updater"
-	"github.com/awan/awan-gui/ui"
+	"github.com/whitehai11/AWaN-GUI/api"
+	"github.com/whitehai11/AWaN-GUI/internal/updater"
+	"github.com/whitehai11/AWaN-GUI/ui"
 )
 
 //go:embed all:frontend
@@ -24,7 +24,7 @@ func main() {
 
 	updater.StartBackground(updater.Options{
 		AppName:        "AWaN GUI",
-		Repo:           "awan/gui",
+		Repo:           "whitehai11/AWaN-GUI",
 		Version:        Version,
 		BinaryBaseName: "awan-gui",
 		Args:           os.Args[1:],

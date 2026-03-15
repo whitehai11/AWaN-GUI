@@ -1,6 +1,6 @@
 package ui
 
-import "github.com/awan/awan-gui/api"
+import "github.com/whitehai11/AWaN-GUI/api"
 
 // GetMemory returns the current memory snapshot for the selected agent.
 func (a *App) GetMemory() (*api.MemorySnapshot, error) {

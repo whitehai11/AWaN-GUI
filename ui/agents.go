@@ -3,7 +3,7 @@ package ui
 import (
 	"context"
 
-	"github.com/awan/awan-gui/api"
+	"github.com/whitehai11/AWaN-GUI/api"
 )
 
 // App is the Wails-bound desktop controller.
