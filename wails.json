@@ -2,9 +2,9 @@
   "$schema": "https://wails.io/schemas/config.v2.json",
   "name": "AWaN GUI",
   "outputfilename": "AWaN-GUI",
-  "frontend:install": "cmd /c echo Static frontend - nothing to install",
-  "frontend:build": "cmd /c echo Static frontend - nothing to build",
-  "frontend:dev:watcher": "cmd /c echo Static frontend - no watcher configured",
+  "frontend:install": "go version",
+  "frontend:build": "go version",
+  "frontend:dev:watcher": "go version",
   "frontend:dev:serverUrl": "",
   "author": {
     "name": "whitehai11",
