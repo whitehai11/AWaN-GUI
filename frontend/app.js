@@ -80,7 +80,8 @@ function renderAgents() {
 		.map(
 			(agent) => `
 				<button class="agent-item ${agent.name === state.currentAgent ? 'active' : ''}" data-agent="${agent.name}" data-model="${agent.model}">
-					<strong>${agent.name}</strong>
+					<span class="agent-name">${agent.name}</span>
+					<span class="agent-model">${agent.model}</span>
 					<p>${agent.description || 'AWaN agent'}</p>
 				</button>
 			`
@@ -102,8 +103,8 @@ function renderChat() {
 	if (state.messages.length === 0) {
 		elements.chatLog.innerHTML = `
 			<div class="empty-state">
-				<p>No conversation yet.</p>
-				<p>When AWaN Core is available, send a prompt to start chatting.</p>
+				<h3>Start a conversation</h3>
+				<p>Pick an agent from the left and send a prompt to AWaN Core.</p>
 			</div>
 		`;
 		return;
@@ -114,7 +115,7 @@ function renderChat() {
 			(message) => `
 				<article class="chat-bubble ${message.role}">
 					<div class="chat-role">${message.role}</div>
-					<p>${escapeHTML(message.content)}</p>
+					<p>${escapeHTML(message.content).replaceAll('\n', '<br />')}</p>
 				</article>
 			`
 		)
@@ -148,7 +149,7 @@ function renderMemorySection(title, records) {
 			${records
 				.map(
 					(record) => `
-						<p><strong>${record.role}</strong> - ${record.id}</p>
+						<p class="record-meta"><strong>${record.role}</strong> - ${record.id}</p>
 						<p>${escapeHTML(record.content)}</p>
 					`
 				)
@@ -215,12 +216,14 @@ elements.chatForm.addEventListener('submit', async (event) => {
 		content: prompt
 	});
 	renderChat();
+	elements.chatLog.scrollTop = elements.chatLog.scrollHeight;
 	elements.promptInput.value = '';
 
 	try {
 		const response = await window.go.ui.App.RunAgent(prompt);
 		state.messages.push(response);
 		renderChat();
+		elements.chatLog.scrollTop = elements.chatLog.scrollHeight;
 		await refreshMemory();
 	} catch (error) {
 		state.messages.push({
@@ -228,6 +231,7 @@ elements.chatForm.addEventListener('submit', async (event) => {
 			content: `Error: ${error.message || 'Failed to contact runtime'}`
 		});
 		renderChat();
+		elements.chatLog.scrollTop = elements.chatLog.scrollHeight;
 	} finally {
 		elements.sendButton.disabled = false;
 	}

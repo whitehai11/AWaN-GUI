@@ -9,66 +9,72 @@
 	<body>
 		<div class="shell">
 			<aside class="sidebar">
-				<div class="brand">
-					<p>AWaN</p>
-					<h1>Desktop Console</h1>
+				<div class="sidebar-top">
+					<div class="brand-lockup">
+						<div class="brand-mark">A</div>
+						<div>
+							<p class="brand-label">AWaN</p>
+							<h1>Local chat</h1>
+						</div>
+					</div>
+					<button id="refresh-agents" class="primary-action">Refresh list</button>
 				</div>
 
-				<div class="panel">
-					<div class="panel-header">
+				<nav class="sidebar-section">
+					<div class="section-header">
 						<h2>Agents</h2>
-						<button id="refresh-agents" class="ghost">Refresh</button>
+						<span class="section-meta">runtime</span>
 					</div>
 					<div id="agent-list" class="agent-list"></div>
-				</div>
+				</nav>
 
-				<div class="panel status-panel">
-					<h2>Runtime</h2>
-					<p id="runtime-status">Checking AWaN Core…</p>
-					<p id="runtime-endpoint" class="muted"></p>
+				<div class="sidebar-footer">
+					<p class="footer-label">Runtime</p>
+					<p id="runtime-status" class="footer-status">Checking AWaN Core...</p>
+					<p id="runtime-endpoint" class="footer-endpoint"></p>
 				</div>
 			</aside>
 
 			<main class="chat-column">
 				<header class="hero">
-					<div>
-						<p class="eyebrow">AWaN Core</p>
-						<h2>Agent chat</h2>
+					<div class="hero-copy">
+						<p class="eyebrow">Chat</p>
+						<h2 id="current-agent-label">Agent: default</h2>
 					</div>
-					<div class="selection">
-						<span id="current-agent-label">Agent: default</span>
-						<span id="current-model-label">Model: openai</span>
+					<div class="hero-meta">
+						<span id="current-model-label" class="pill">Model: openai</span>
+						<span class="pill muted-pill">AWaN Core</span>
 					</div>
 				</header>
 
 				<section id="chat-log" class="chat-log">
 					<div class="empty-state">
-						<p>No conversation yet.</p>
-						<p>When AWaN Core is available, send a prompt to start chatting.</p>
+						<h3>Start a conversation</h3>
+						<p>Pick an agent from the left and send a prompt to AWaN Core.</p>
 					</div>
 				</section>
 
 				<form id="chat-form" class="composer">
-					<textarea id="prompt-input" rows="4" placeholder="Ask AWaN something useful..."></textarea>
+					<textarea id="prompt-input" rows="3" placeholder="Message AWaN"></textarea>
 					<div class="composer-actions">
-						<button type="submit" id="send-button">Send</button>
+						<button type="submit" id="send-button">Send message</button>
 					</div>
 				</form>
 			</main>
 
 			<aside class="context-column">
-				<section class="panel">
+				<section class="panel side-panel">
 					<div class="panel-header">
 						<h2>Memory</h2>
-						<button id="refresh-memory" class="ghost">Refresh</button>
+						<button id="refresh-memory" class="ghost">Reload</button>
 					</div>
 					<div id="memory-panel" class="stack"></div>
 				</section>
 
-				<section class="panel">
+				<section class="panel side-panel">
 					<div class="panel-header">
 						<h2>Files</h2>
-						<button id="refresh-files" class="ghost">Refresh</button>
+						<button id="refresh-files" class="ghost">Reload</button>
 					</div>
 					<div id="files-panel" class="stack"></div>
 				</section>
